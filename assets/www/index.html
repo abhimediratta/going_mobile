@@ -1,0 +1,397 @@
+
+<html>
+<title>HomeSafe Booking</title>
+<head>
+	<meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, maximum-scale=1.0,target-densityDpi=device-dpi" />
+	
+	<link rel="stylesheet" href="css/style.css" />
+	<link href="css/mobiscroll.custom-2.6.2.min.css" rel="stylesheet" type="text/css" />
+	<script src="cordova-2.5.0.js"></script>
+	<script src="jquery-1.9.1.js"></script>
+	<script type="text/javascript" src="mobiscroll.custom-2.6.2.min.js"></script>
+	<script src="jquery.phoenix.min.js"></script>
+	<script type="text/javascript"
+      src="https://maps.googleapis.com/maps/api/js?key=AIzaSyD8KXsbFJ3BSvpQSnQYDGaAXyXVwZkK7QE&sensor=true&libraries=places">
+    </script>
+	
+	
+	<script type="text/javascript">
+	
+	var map,xmlhttp,request,fill_input=0,marker,infowindow,drop_infowindow,center_change_timeout,drop_marker;
+	
+	var now = new Date();
+	
+	function checkConnection() {
+        var networkState = navigator.connection.type;
+		return networkState;
+    }
+	google.maps.visualRefresh = true;
+	
+	function fixInfoWindow() {
+    //Here we redefine set() method.
+    //If it is called for map option, we hide InfoWindow, if "noSupress" option isnt true.
+    //As Google doesn't know about this option, its InfoWindows will not be opened.
+		var set = google.maps.InfoWindow.prototype.set;
+		google.maps.InfoWindow.prototype.set = function (key, val) {
+			if (key === 'map') {
+				if (!this.get('noSupress')) {
+					console.log('down');
+					return;
+				}
+			}
+			set.apply(this, arguments);
+		}
+	}
+	
+	
+	
+      function initialize() {
+		
+		document.addEventListener("deviceready", onDeviceReady, true);
+		var input = /** @type {HTMLInputElement} */(document.getElementById('pac-input'));
+  
+
+        var mapOptions = {
+          center: new google.maps.LatLng(28.6139, 77.2089),
+          disableDefaultUI: true,
+		  suppressInfoWindows: true
+		  //styles: noPoi
+        };
+        map = new google.maps.Map(document.getElementById("map-canvas"),
+            mapOptions);
+		
+		var pick_image = {
+    		url: 'maps_marker.png',
+    		// This marker is 20 pixels wide by 32 pixels tall.
+    		size: new google.maps.Size(40, 40)
+    		// The origin for this image is 0,0.
+    		//origin: new google.maps.Point(0,0),
+    		// The anchor for this image is the base of the flagpole at 0,32.
+    		//anchor: new google.maps.Point(0, 32)
+  		};
+  		
+  				
+		marker = new google.maps.Marker({
+		  map: map,
+		  title: 'Current Location',
+		  animation: null,
+		  icon:pick_image
+		});
+		
+		fixInfoWindow();			
+		infowindow = new google.maps.InfoWindow({
+			maxWidth:230,
+			noSupress: true			
+			//content: info_content 
+		});
+		map.controls[google.maps.ControlPosition.TOP_LEFT].push(input);
+		
+		var searchBox = new google.maps.places.SearchBox((input));
+		var bounds = new google.maps.LatLngBounds(
+			new google.maps.LatLng(28.4010669, 76.83969990000003),
+			new google.maps.LatLng(28.88981589999999, 77.34181460000002)
+  	    );
+		
+		searchBox.setBounds(bounds);
+		
+		google.maps.event.addListener(searchBox, 'places_changed', function() {
+			$('#pac-input').val("");
+			var places = searchBox.getPlaces();
+			
+			
+			var bounds = new google.maps.LatLngBounds();
+			//for (var i = 0, place; place = places[i]; i++) {
+			place=places[0];
+				var lat = place.geometry.location.lat();
+				var lng = place.geometry.location.lng();
+				
+				
+				bounds.extend(place.geometry.location);
+				var old_address=$('#pick_up_info').html();
+				var info_content='<div class="info_content">'+
+									'<h4>Pickup location</h4>'+
+									'<div id="pick_up_info">'+
+									'Loading...'+
+									'</div>'+
+									'</div>';
+				infowindow.setContent(info_content);
+				map.setZoom(18);
+				setTimeout(function(){
+				request="http://maps.googleapis.com/maps/api/geocode/json?latlng="+lat+","+lng+"&sensor=true";
+				xmlhttp=new XMLHttpRequest();
+				  
+				  xmlhttp.onreadystatechange=function()
+				  {
+					if (xmlhttp.readyState==4 && xmlhttp.status==200)
+					{
+						
+						var resp=xmlhttp.responseText;
+						var area_response=$.parseJSON(resp);
+						var address=area_response.results[0].formatted_address;
+						console.log(fill_input);
+						
+						if(address.indexOf("Delhi") === -1 && address.indexOf("Noida") === -1 && address.indexOf("Gurgaon") === -1 && address.indexOf("Faridabad") === -1)
+						{
+							
+							info_content='<div class="info_content">'+
+									'<h4>Pickup location</h4>'+
+									'<div id="pick_up_info">'+
+									old_address+
+									'</div>'+
+									'</div>';
+							infowindow.setContent(info_content);
+							navigator.notification.alert("We currently operate only in Delhi NCR");
+							return false;
+						}
+						marker.setPosition(place.geometry.location);
+						map.setCenter(place.geometry.location);
+						$('#pick_up_location').val(address);
+						info_content='<div class="info_content">'+
+									'<h4>Pickup location</h4>'+
+									'<div id="pick_up_info">'+
+									address+
+									'</div>'+
+									'</div>';
+						infowindow.setContent(info_content);
+					}
+				  }
+				  xmlhttp.open("GET",request,false);
+				  xmlhttp.send();},200);
+			//}
+			
+			//map.fitBounds(bounds);
+		});
+		
+		
+		google.maps.event.addListener(map, 'click', function( event ){
+			var lat = event.latLng.lat();
+			var lng = event.latLng.lng();
+			var info_content='<div class="info_content">'+
+									'<h4>Pickup location</h4>'+
+									'<div id="pick_up_info">'+
+									'Loading...'+
+									'</div>'+
+									'</div>';
+			infowindow.setContent(info_content);
+			map.setCenter(new google.maps.LatLng(lat, lng));
+		  	marker.setPosition(new google.maps.LatLng(lat, lng));
+		  	
+		  	setTimeout(function(){
+				request="http://maps.googleapis.com/maps/api/geocode/json?latlng="+lat+","+lng+"&sensor=true";
+				xmlhttp=new XMLHttpRequest();
+				  
+				  xmlhttp.onreadystatechange=function()
+				  {
+					if (xmlhttp.readyState==4 && xmlhttp.status==200)
+					{
+						
+						var resp=xmlhttp.responseText;
+						var area_response=$.parseJSON(resp);
+						var address=area_response.results[0].formatted_address;
+						console.log(fill_input);
+						$('#pick_up_location').val(address);
+						info_content='<div class="info_content">'+
+									'<h4>Pickup location</h4>'+
+									'<div id="pick_up_info">'+
+									address+
+									'</div>'+
+									'</div>';
+						infowindow.setContent(info_content);
+					}
+				  }
+				  xmlhttp.open("GET",request,false);
+				  xmlhttp.send();},200);
+			  	  
+			  			  
+		});
+		
+			
+		
+		getLocation();
+      }
+	  
+	  
+	  
+	  
+	function onDeviceReady(){
+        //navigator.notification.alert("PhoneGap is working!!");
+		var network_state=checkConnection();
+		
+		
+		if(network_state === Connection.UNKNOWN || network_state === Connection.NONE )
+		{
+			alert("Please check your internet connection and try again");
+			navigator.app.exitApp();
+		}
+		else{
+			navigator.splashscreen.hide();
+			document.addEventListener("backbutton", onBackKeyDown, false);
+		}
+     }
+     
+    function onBackKeyDown(){
+    	if($("form").is(":visible"))
+    	{
+			if($('#pick_up_time').mobiscroll('isVisible'))
+			{
+				$('#pick_up_time').mobiscroll('hide');
+			}
+			else{
+    		
+				$('#map-canvas').show();
+				google.maps.event.trigger(map, 'resize'); 
+				$('form').hide();
+				$('#create_booking').show().html('Continue Booking').css('width','50%');
+				
+				infowindow.open(map,marker);
+			}
+    	}
+    	else{
+    		navigator.app.exitApp();
+    	}
+    } 
+	  
+	function getLocation() {
+	  if (navigator.geolocation) {
+		navigator.geolocation.getCurrentPosition(showPosition,errorCallback,{enableHighAccuracy: true,timeout:25000});
+	  } else {
+		alert("Geolocation is not supported by this browser.");
+	  }
+	}
+
+	function errorCallback(error){
+		alert(error.message);
+	}
+
+	function showPosition(position,input_flag) {
+		
+	  var lat = position.coords.latitude;
+	  var lng = position.coords.longitude;
+	  map.setCenter(new google.maps.LatLng(lat, lng));
+	  marker.setPosition(new google.maps.LatLng(lat, lng));
+	  
+	  request="http://maps.googleapis.com/maps/api/geocode/json?latlng="+lat+","+lng+"&sensor=true";
+	  xmlhttp=new XMLHttpRequest();
+	  
+	  xmlhttp.onreadystatechange=function()
+	  {
+		if (xmlhttp.readyState==4 && xmlhttp.status==200)
+		{
+			
+			var resp=xmlhttp.responseText;
+			var area_response=$.parseJSON(resp);
+			//alert(area_response.results[0].formatted_address);
+			var address=area_response.results[0].formatted_address;
+			if(fill_input === 1)
+			{
+				$('#pick_up_location').val(address);
+				fill_input=0;
+			}
+			else if(fill_input === 2)
+			{
+				$('#drop_off_location').val(address);
+				fill_input=0;
+			}
+			var info_content='<div class="info_content">'+
+							'<h4>Pickup location</h4>'+
+							'<div id="pick_up_info">'+
+							address+
+							'</div>'+
+							'</div>';
+			infowindow.setContent(info_content);
+			infowindow.open(map,marker);
+			setTimeout(function(){
+				infowindow.open(map,marker);
+			},500);
+			
+		}
+	  }
+	  xmlhttp.open("GET",request,false);
+	  xmlhttp.send();
+	  
+	  
+	  map.setZoom(18);
+	}
+		
+	$(document).ready(function(){
+		
+		 
+		$('#contact_no').phoenix();
+		$('#car_model').phoenix();		
+		init_datetimepicker('#pick_up_time');
+		$('#get_pick_location').click(function(){
+			fill_input=1;
+			getLocation();
+		});
+		$('#get_drop_location').click(function(){
+			fill_input=2;
+			getLocation();
+		});
+		if (localStorage) {
+		  // LocalStorage is supported!
+		  
+		  var run_count = localStorage.getItem('first_time');
+		  
+		  if(run_count == null)
+		  {
+		  
+		  	localStorage.setItem('first_time',1);
+		  }
+		  else{
+		  	localStorage.setItem('first_time',parseInt(run_count)+1);
+		  }
+		} else {
+		  // No support. Use a fallback such as browser cookies or store on the server.
+		  alert("no");
+		}
+		
+		$('#create_booking').click(function(){
+			$('#map-canvas').hide();
+			$('form').show();
+			$(this).hide();
+			$('#confirm_booking').show();
+		});
+		
+	});	
+	
+	var next_hour=new Date();
+	next_hour.setHours(now.getHours()+1);
+	
+	function init_datetimepicker(id) {
+      $(id).scroller({ preset: 'datetime', dateFormat: "dd/M/y", timeFormat: 'HH:ii', dateOrder: "ddMyy",theme: "android-ics", mode: "scroller", startYear: now.getFullYear(), minDate: new Date(now.getFullYear(),now.getMonth(),now.getDate(), now.getHours()+1,now.getMinutes()), rows:3, stepMinute: 10, height:60 });
+	  $(id).mobiscroll('setDate',next_hour,true,1);
+    }
+	
+		
+		
+	</script>
+</head>
+<body onload="initialize()">
+	<div id="header">
+		<img alt="Home Safe" class="header_logo" src="images/homesafe_horizontal.png" />
+		<span>BOOK A CHAUFFEUR</span>
+	</div>
+	<div id="main">
+		
+
+		<div id="map-canvas"><input id="pac-input" class="controls" type="text" placeholder="Search Area" /></div> 
+		<form id="booking_form" action="#" >
+			
+			<input type="tel" id="contact_no" placeholder="Contact Number*" maxlength="10"/>
+			<div class="group">
+				<span id="get_pick_location" class="gps_icon" title="Press to get current location address/ Select a point on map to get address"></span><textarea cols="10" id="pick_up_location" placeholder="Pickup Location*" ></textarea>
+			</div>
+			<div class="group">
+				<span id="get_drop_location" class="gps_icon" title="Press to get current location address/ Select a point on map to get address"></span><textarea cols="10" id="drop_off_location" placeholder="Drop off Location*" ></textarea>
+			</div>
+			<input type="text" id="pick_up_time" placeholder="Pickup time*" />
+			<input type="text" id="car_model" placeholder="Car*" /> 
+			<input type="submit" id="confirm_booking" class="custom_button" value="Confirm Booking" />
+		</form>		
+	</div>
+	<div id="footer">
+		<button id="create_booking" class="custom_button">Book Now</button>
+	</div>
+</body>
+
+</html>
